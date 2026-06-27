@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Map of Science — OpenAlex Citation Graph</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #02020a;
+      color: #e8e8f0;
+      font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 22px 26px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #title-block h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #fff;
+      opacity: 0.88;
+    }
+
+    #title-block p {
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      color: #55556a;
+      margin-top: 4px;
+    }
+
+    /* ── Stats ── */
+    #stats-strip {
+      position: fixed;
+      bottom: 26px;
+      left: 26px;
+      display: flex;
+      gap: 26px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-value {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #3e3e56;
+    }
+
+    /* ── Legend ── */
+    #legend {
+      position: fixed;
+      bottom: 26px;
+      right: 26px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      pointer-events: none;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    #legend::-webkit-scrollbar {
+      display: none;
+    }
+
+    #legend-title {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #3e3e56;
+      margin-bottom: 2px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 10.5px;
+      color: #77779a;
+    }
+
+    .legend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Tooltip ── */
+    #tooltip {
+      position: fixed;
+      z-index: 20;
+      background: rgba(6, 6, 18, 0.93);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 9px;
+      padding: 12px 15px;
+      font-size: 12px;
+      line-height: 1.75;
+      pointer-events: none;
+      display: none;
+      max-width: 260px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    #tooltip .tt-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 6px;
+      white-space: normal;
+    }
+
+    #tooltip .tt-row {
+      color: #66668a;
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    #tooltip .tt-row span {
+      color: #c0c0e0;
+      font-weight: 500;
+    }
+
+    /* ── Controls ── */
+    #controls {
+      position: fixed;
+      top: 22px;
+      right: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      z-index: 10;
+    }
+
+    .ctrl-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: #88889a;
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      padding: 7px 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.14s;
+      text-transform: uppercase;
+      pointer-events: all;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(255, 255, 255, 0.09);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .ctrl-btn.active {
+      background: rgba(110, 90, 255, 0.17);
+      border-color: rgba(110, 90, 255, 0.42);
+      color: #b0a8ff;
+    }
+
+    /* ── Threshold slider ── */
+    #threshold-panel {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(6, 6, 18, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 9px 16px;
+      backdrop-filter: blur(12px);
+      pointer-events: all;
+    }
+
+    #threshold-panel label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #55556a;
+    }
+
+    #threshold-slider {
+      width: 130px;
+      accent-color: #7b6bff;
+      cursor: pointer;
+    }
+
+    #threshold-val {
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      color: #aaaacc;
+      min-width: 42px;
+    }
+
+    /* ── Search ── */
+    #search-panel {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      pointer-events: all;
+    }
+
+    #search-input {
+      background: rgba(6, 6, 18, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 7px;
+      padding: 8px 14px;
+      font-size: 12px;
+      color: #e0e0f0;
+      width: 220px;
+      outline: none;
+      backdrop-filter: blur(12px);
+      font-family: inherit;
+      letter-spacing: 0.02em;
+    }
+
+    #search-input::placeholder {
+      color: #33334a;
+    }
+
+    #search-input:focus {
+      border-color: rgba(110, 90, 255, 0.4);
+    }
+
+    /* ── Loading ── */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #02020a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      gap: 18px;
+      transition: opacity 0.55s ease;
+    }
+
+    #loading h2 {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #44445a;
+    }
+
+    #loading-bar-outer {
+      width: 220px;
+      height: 1.5px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #6b5bff, #b060ff);
+      border-radius: 2px;
+      transition: width 0.25s ease;
+    }
+
+    #loading-status {
+      font-size: 10.5px;
+      color: #2e2e42;
+      letter-spacing: 0.08em;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="loading">
+    <h2>Map of Science</h2>
+    <div id="loading-bar-outer">
+      <div id="loading-bar"></div>
+    </div>
+    <div id="loading-status">Initialising WebGL renderer…</div>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="hud">
+    <div id="title-block">
+      <h1>Map of Science</h1>
+      <p>OpenAlex · Top 0.1% Papers by PageRank · Domain-Separated Field Clusters</p>
+    </div>
+  </div>
+
+  <div id="threshold-panel">
+    <label>PR Threshold</label>
+    <input type="range" id="threshold-slider" min="0" max="100" value="50" step="1">
+    <span id="threshold-val">50%</span>
+  </div>
+
+  <div id="controls">
+    <button class="ctrl-btn active" id="btn-rotate">Auto-Rotate</button>
+    <button class="ctrl-btn" id="btn-edges">Hide Edges</button>
+    <button class="ctrl-btn" id="btn-reset">Reset View</button>
+  </div>
+
+  <div id="stats-strip">
+    <div class="stat">
+      <div class="stat-value" id="stat-nodes">—</div>
+      <div class="stat-label">Nodes Visible</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-edges">—</div>
+      <div class="stat-label">Edges Visible</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-papers">90M</div>
+      <div class="stat-label">Papers Indexed</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="stat-citations">1.5B</div>
+      <div class="stat-label">Citations Mapped</div>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div id="legend-title">Field</div>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <input type="text" id="search-input" placeholder="Search paper or field…">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+
+    const COLOR_POOL = [
+      0x7B68EE, 0x48CAE4, 0x4CC9F0, 0x06D6A0, 0x52B788, 0xF72585, 0xFFBE0B, 0xFB5607,
+      0x80B918, 0x9B72CF, 0xA8DADC, 0xE9C46A, 0xE76F51, 0xF4A261, 0xFF9F1C, 0xFFBF69,
+      0x5390D9, 0xEF233C, 0x00B4D8, 0x588157, 0xC77DFF, 0x70E000, 0xFF6B6B, 0xFFD166,
+      0x06A77D, 0xD62246, 0x4281A4, 0xE8C547, 0x3A86FF, 0xFF006E, 0x8338EC, 0xFB8500,
+      0x023E8A, 0x80F5D2, 0xF3722C, 0x90BE6D, 0x43AA8B, 0x577590, 0xF9C74F, 0xF8961E,
+      0x277DA1, 0x4D908E, 0x43AA8B, 0xF94144, 0x6A4C93, 0x1982C4, 0x8AC926, 0xFF595E,
+    ];
+
+    let FIELD_PALETTE = [];
+
+    function fieldColor(fieldName) {
+      const match = FIELD_PALETTE.find(f => f.name === fieldName);
+      return match ? match.color : 0x666688;
+    }
+
+    function fieldIndex(fieldName) {
+      return FIELD_PALETTE.findIndex(f => f.name === fieldName);
+    }
+
+    async function loadGraphData() {
+      setStatus('Connecting to Databricks…', 10);
+      const resp = await fetch('/api/graph');
+      if (!resp.ok) throw new Error(`Server returned ${resp.status}: ${await resp.text()}`);
+      setStatus('Streaming node catalogue…', 30);
+      const raw = await resp.json();
+
+      const uniqueFields = [...new Set(raw.nodes.map(n => n.field || 'Unknown'))].sort();
+      FIELD_PALETTE = uniqueFields.map((name, i) => ({
+        name,
+        color: COLOR_POOL[i % COLOR_POOL.length],
+      }));
+      console.log(`Discovered ${FIELD_PALETTE.length} fields:`, uniqueFields);
+
+      const nodes = raw.nodes.map(n => {
+        const field = n.field || 'Unknown';
+        const fi = fieldIndex(field);
+        return {
+          id: n.id,
+          label: n.title,
+          field,
+          domain: n.domain || '',
+          color: fieldColor(field),
+          field_idx: fi,
+          pagerank: n.pagerank,
+          citations: Math.round(n.pagerank * 8_000_000),
+          year: null,
+          x: 0, y: 0, z: 0,
+        };
+      });
+
+      const N_FIELDS    = FIELD_PALETTE.length;
+      const PHI         = Math.PI * (3 - Math.sqrt(5));
+      
+      // CRITICAL MODIFICATION: Increased localized spread threshold to disperse cluster nodes slightly further apart
+      const NODE_SPREAD = 2.2; 
+
+      const nodeFieldIdx = nodes.map(n =>
+        (n.field_idx >= 0 && n.field_idx < N_FIELDS) ? n.field_idx : 0
+      );
+
+      const crossRaw = Array.from({ length: N_FIELDS }, () => new Float32Array(N_FIELDS));
+      raw.edges.forEach(e => {
+        const fi = nodeFieldIdx[e.s];
+        const fj = nodeFieldIdx[e.t];
+        if (fi !== fj) { crossRaw[fi][fj] += 1; crossRaw[fj][fi] += 1; }
+      });
+
+      let maxRaw = 0;
+      for (let i = 0; i < N_FIELDS; i++)
+        for (let j = 0; j < N_FIELDS; j++)
+          if (crossRaw[i][j] > maxRaw) maxRaw = crossRaw[i][j];
+
+      const crossWeight = Array.from({ length: N_FIELDS }, () => new Float32Array(N_FIELDS));
+      const logMax = Math.log(maxRaw + 1);
+      for (let i = 0; i < N_FIELDS; i++)
+        for (let j = 0; j < N_FIELDS; j++)
+          crossWeight[i][j] = crossRaw[i][j] > 0 ? Math.log(crossRaw[i][j] + 1) / logMax : 0;
+
+      const fieldStrength = new Float32Array(N_FIELDS);
+      for (let i = 0; i < N_FIELDS; i++)
+        for (let j = 0; j < N_FIELDS; j++)
+          fieldStrength[i] += crossWeight[i][j];
+
+      const FIELD_R = 24.0; 
+      const fieldCentres = FIELD_PALETTE.map((_, i) => {
+        const y = 1 - (i / Math.max(N_FIELDS - 1, 1)) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const t = PHI * i;
+        return { x: FIELD_R * r * Math.cos(t), y: FIELD_R * y, z: FIELD_R * r * Math.sin(t),
+                 vx: 0, vy: 0, vz: 0, fx: 0, fy: 0, fz: 0 };
+      });
+
+      setStatus('Computing expanded topology engine…', 50);
+
+      const REPULSE_K   = 32.0;    
+      const ATTRACT_K   = 5.0;     
+      const TARGET_CLOSE = 8.5;    
+      const TARGET_FAR   = 52.0;   
+      const MAX_STEP     = 0.5;
+      const ITERATIONS   = 600;
+      const CENTER_VOID  = 8.0;    
+
+      for (let iter = 0; iter < ITERATIONS; iter++) {
+        const t   = iter / ITERATIONS;
+        const cool = t < 0.6 ? 1.0 : 1.0 - (t - 0.6) / 0.4 * 0.95;
+
+        for (let i = 0; i < N_FIELDS; i++) {
+          fieldCentres[i].fx = 0;
+          fieldCentres[i].fy = 0;
+          fieldCentres[i].fz = 0;
+        }
+
+        for (let i = 0; i < N_FIELDS; i++) {
+          for (let j = i + 1; j < N_FIELDS; j++) {
+            const dx   = fieldCentres[i].x - fieldCentres[j].x;
+            const dy   = fieldCentres[i].y - fieldCentres[j].y;
+            const dz   = fieldCentres[i].z - fieldCentres[j].z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) || 0.01;
+            const nx = dx/dist, ny = dy/dist, nz = dz/dist;
+
+            const rep = REPULSE_K / (dist * dist);
+
+            const w = crossWeight[i][j];
+            const targetDist = TARGET_CLOSE + (TARGET_FAR - TARGET_CLOSE) * (1 - w);
+            const stretch = dist - targetDist;
+            const attr = w > 0 ? ATTRACT_K * w * stretch : 0;
+
+            const netOnI = rep - attr;
+            fieldCentres[i].fx += nx * netOnI;
+            fieldCentres[i].fy += ny * netOnI;
+            fieldCentres[i].fz += nz * netOnI;
+            fieldCentres[j].fx -= nx * netOnI;
+            fieldCentres[j].fy -= ny * netOnI;
+            fieldCentres[j].fz -= nz * netOnI;
+          }
+
+          fieldCentres[i].fx -= fieldCentres[i].x * 0.015;
+          fieldCentres[i].fy -= fieldCentres[i].y * 0.015;
+          fieldCentres[i].fz -= fieldCentres[i].z * 0.015;
+
+          const distToOrigin = Math.sqrt(fieldCentres[i].x*fieldCentres[i].x + fieldCentres[i].y*fieldCentres[i].y + fieldCentres[i].z*fieldCentres[i].z) || 0.01;
+          if (distToOrigin < CENTER_VOID) {
+            const pushForce = (CENTER_VOID - distToOrigin) * 3.5;
+            fieldCentres[i].fx += (fieldCentres[i].x / distToOrigin) * pushForce;
+            fieldCentres[i].fy += (fieldCentres[i].y / distToOrigin) * pushForce;
+            fieldCentres[i].fz += (fieldCentres[i].z / distToOrigin) * pushForce;
+          }
+        }
+
+        for (let i = 0; i < N_FIELDS; i++) {
+          let dx = fieldCentres[i].fx * 0.08 * cool;
+          let dy = fieldCentres[i].fy * 0.08 * cool;
+          let dz = fieldCentres[i].fz * 0.08 * cool;
+          const stepLen = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          if (stepLen > MAX_STEP) { const s = MAX_STEP/stepLen; dx*=s; dy*=s; dz*=s; }
+          fieldCentres[i].x += dx;
+          fieldCentres[i].y += dy;
+          fieldCentres[i].z += dz;
+        }
+      }
+
+      nodes.forEach((n, i) => {
+        const fi     = nodeFieldIdx[i];
+        const centre = fieldCentres[fi];
+        const theta  = Math.random() * Math.PI * 2;
+        const phi2   = Math.acos(2 * Math.random() - 1);
+        const r      = Math.pow(Math.random(), 1/3) * NODE_SPREAD;
+        n.x = centre.x + r * Math.sin(phi2) * Math.cos(theta);
+        n.y = centre.y + r * Math.sin(phi2) * Math.sin(theta);
+        n.z = centre.z + r * Math.cos(phi2);
+      });
+
+      setStatus('Processing edge topology…', 70);
+      return { nodes, edges: raw.edges };
+    }
+
+    function setStatus(msg, pct) {
+      const b = document.getElementById('loading-bar'); const s = document.getElementById('loading-status');
+      if (b) b.style.width = pct + '%'; if (s) s.textContent = msg;
+    }
+
+    async function init() {
+      let nodes, edges;
+      try {
+        ({ nodes, edges } = await loadGraphData());
+      } catch (err) {
+        setStatus('Failed to load data: ' + err.message, 100);
+        console.error(err);
+        return;
+      }
+
+      setStatus('Building WebGL context…', 75);
+
+      const container = document.getElementById('canvas-container');
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x02020a, 1);
+      container.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x02020a, 0.016); 
+
+      const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.01, 800);
+      camera.position.set(0, 0, 52); 
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+      const dirA = new THREE.DirectionalLight(0x9999ff, 1.1); dirA.position.set(6, 10, 7); scene.add(dirA);
+      const dirB = new THREE.DirectionalLight(0xff6677, 0.45); dirB.position.set(-7, -4, -5); scene.add(dirB);
+
+      setStatus('Processing topological vectors…', 80);
+      const N = nodes.length;
+
+      const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y), zs = nodes.map(n => n.z);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+      const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+
+      const positions = nodes.map(n => new THREE.Vector3(
+        n.x - cx, n.y - cy, n.z - cz
+      ));
+
+      const prAll = nodes.map(n => n.pagerank);
+      const prMin = Math.min(...prAll), prMax = Math.max(...prAll);
+
+      const logPrMin = Math.log(prMin + 1e-15);
+      const logPrMax = Math.log(prMax + 1e-15);
+      const normPR = v => (Math.log(v + 1e-15) - logPrMin) / (logPrMax - logPrMin + 1e-12);
+
+      const nodeRadius = v => 0.04 + Math.pow(normPR(v), 0.6) * 0.34;
+
+      nodes.forEach(n => { if (!n.color) n.color = fieldColor(n.field); });
+
+      setStatus('Instantiating balanced node clouds…', 58);
+
+      const sphereGeo = new THREE.SphereGeometry(1, 12, 8);
+      const dummy = new THREE.Object3D();
+      const colorBuckets = {};
+
+      nodes.forEach((n, i) => {
+        const key = n.color;
+        if (!colorBuckets[key]) colorBuckets[key] = [];
+        colorBuckets[key].push(i);
+      });
+
+      const instanceGroups = [];
+
+      Object.entries(colorBuckets).forEach(([colorKey, nodeIndices]) => {
+        const hex = parseInt(colorKey);
+        const mat = new THREE.MeshPhongMaterial({
+          color: hex, emissive: hex, emissiveIntensity: 0.15,
+          shininess: 60, transparent: true, opacity: 0.88,
+        });
+
+        const mesh = new THREE.InstancedMesh(sphereGeo, mat, nodeIndices.length);
+        mesh.frustumCulled = false;
+
+        nodeIndices.forEach((nodeIdx, instIdx) => {
+          const radius = nodeRadius(nodes[nodeIdx].pagerank);
+          dummy.position.copy(positions[nodeIdx]); dummy.scale.setScalar(radius); dummy.updateMatrix();
+          mesh.setMatrixAt(instIdx, dummy.matrix);
+          if (!mesh.userData.nodeMap) mesh.userData.nodeMap = {};
+          mesh.userData.nodeMap[instIdx] = nodeIdx;
+        });
+
+        mesh.instanceMatrix.needsUpdate = true;
+        scene.add(mesh);
+        instanceGroups.push({ mesh, nodeIndices, mat });
+      });
+
+      setStatus('Weaving citation splines…', 75);
+
+      const edgeWeights = edges.map(e => {
+        const prS = normPR(nodes[e.s].pagerank);
+        const prT = normPR(nodes[e.t].pagerank);
+        return Math.sqrt(prS * prT);
+      });
+
+      const edgeVertShader = `
+        attribute vec3 posA;
+        attribute vec3 posB;
+        attribute float edgeW;
+        attribute vec3 colA;
+        attribute vec3 colB;
+        attribute float side;
+
+        uniform float uThickMin;
+        uniform float uThickMax;
+        uniform vec2  uResolution;
+
+        varying vec3 vColor;
+        varying float vAlpha;
+
+        void main() {
+          vec4 clipA = projectionMatrix * modelViewMatrix * vec4(posA, 1.0);
+          vec4 clipB = projectionMatrix * modelViewMatrix * vec4(posB, 1.0);
+
+          vec2 ndcA = clipA.xy / clipA.w;
+          vec2 ndcB = clipB.xy / clipB.w;
+
+          vec2 dir = normalize((ndcB - ndcA) * uResolution);
+          vec2 normal = vec2(-dir.y, dir.x);
+
+          float halfW = mix(uThickMin, uThickMax, edgeW) / (uResolution.y * 0.5);
+
+          vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec2 offset = normal * halfW * side * clip.w;
+          clip.xy += offset;
+
+          vColor = mix(colA, colB, clamp(dot(position - posA, posB - posA) /
+                   max(dot(posB - posA, posB - posA), 0.0001), 0.0, 1.0));
+          
+          vAlpha = mix(0.005, 0.09, edgeW); 
+          gl_Position = clip;
+        }
+      `;
+
+      const edgeFragShader = `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+          gl_FragColor = vec4(vColor, vAlpha);
+        }
+      `;
+
+      let edgeLines    = null;
+      let edgeMeshObj  = null;
+      let edgeMat      = null;
+
+      let highlightLines = null;
+      let highlightGeo   = null;
+      const highlightMat = new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 1.0,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+
+      const CURVE_SEGMENTS = 16; 
+
+      function buildThickEdgeGeo(mask) {
+        const activeEdges = [];
+        for (let i = 0; i < edges.length; i++)
+          if (!mask || mask[i]) activeEdges.push(i);
+
+        const nE = activeEdges.length;
+        const totalQuads = nE * CURVE_SEGMENTS;
+
+        const posArr  = new Float32Array(totalQuads * 4 * 3);
+        const posAArr = new Float32Array(totalQuads * 4 * 3);
+        const posBArr = new Float32Array(totalQuads * 4 * 3);
+        const wArr    = new Float32Array(totalQuads * 4);
+        const sideArr = new Float32Array(totalQuads * 4);
+        const colAArr = new Float32Array(totalQuads * 4 * 3);
+        const colBArr = new Float32Array(totalQuads * 4 * 3);
+        const indices = new Uint32Array(totalQuads * 6);
+
+        let quadIdx = 0;
+
+        activeEdges.forEach((ei) => {
+          const { s, t } = edges[ei];
+          const pA = positions[s], pB = positions[t];
+          const cA = new THREE.Color(nodes[s].color);
+          const cB = new THREE.Color(nodes[t].color);
+          const w  = edgeWeights[ei];
+
+          const dist = pA.distanceTo(pB);
+          const pC = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+          
+          if (pC.length() > 0.001) {
+            const pull = pC.clone().normalize().multiplyScalar(dist * 0.32);
+            pC.add(pull);
+          }
+
+          function getBezierPoint(tCoeff) {
+            const oneMinusT = 1.0 - tCoeff;
+            return new THREE.Vector3()
+              .addScaledVector(pA, oneMinusT * oneMinusT)
+              .addScaledVector(pC, 2.0 * oneMinusT * tCoeff)
+              .addScaledVector(pB, tCoeff * tCoeff);
+          }
+
+          for (let seg = 0; seg < CURVE_SEGMENTS; seg++) {
+            const t0 = seg / CURVE_SEGMENTS;
+            const t1 = (seg + 1) / CURVE_SEGMENTS;
+
+            const pt0 = getBezierPoint(t0);
+            const pt1 = getBezierPoint(t1);
+
+            const segColor0 = cA.clone().lerp(cB, t0);
+            const segColor1 = cA.clone().lerp(cB, t1);
+
+            const base = quadIdx * 4;
+            const verts = [pt0, pt0, pt1, pt1];
+            const sides = [-1, 1, -1, 1];
+
+            verts.forEach((p, vi) => {
+              const vi3 = (base + vi) * 3;
+              posArr[vi3]   = p.x; posArr[vi3+1]   = p.y; posArr[vi3+2]   = p.z;
+              posAArr[vi3]  = pt0.x; posAArr[vi3+1] = pt0.y; posAArr[vi3+2] = pt0.z;
+              posBArr[vi3]  = pt1.x; posBArr[vi3+1] = pt1.y; posBArr[vi3+2] = pt1.z;
+              
+              colAArr[vi3]  = segColor0.r; colAArr[vi3+1] = segColor0.g; colAArr[vi3+2] = segColor0.b;
+              colBArr[vi3]  = segColor1.r; colBArr[vi3+1] = segColor1.g; colBArr[vi3+2] = segColor1.b;
+              
+              wArr[base+vi]    = w;
+              sideArr[base+vi] = sides[vi];
+            });
+
+            const ib = quadIdx * 6;
+            indices[ib]   = base;   indices[ib+1] = base+1; indices[ib+2] = base+2;
+            indices[ib+3] = base+1; indices[ib+4] = base+3; indices[ib+5] = base+2;
+
+            quadIdx++;
+          }
+        });
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(posArr,  3));
+        geo.setAttribute('posA',     new THREE.Float32BufferAttribute(posAArr, 3));
+        geo.setAttribute('posB',     new THREE.Float32BufferAttribute(posBArr, 3));
+        geo.setAttribute('edgeW',    new THREE.Float32BufferAttribute(wArr,    1));
+        geo.setAttribute('side',     new THREE.Float32BufferAttribute(sideArr, 1));
+        geo.setAttribute('colA',     new THREE.Float32BufferAttribute(colAArr, 3));
+        geo.setAttribute('colB',     new THREE.Float32BufferAttribute(colBArr, 3));
+        geo.setIndex(new THREE.BufferAttribute(indices, 1));
+        return { geo, visible: activeEdges.length };
+      }
+
+      function createThickEdges(mask) {
+        if (edgeMeshObj) { scene.remove(edgeMeshObj); edgeMeshObj.geometry.dispose(); }
+
+        const { geo, visible } = buildThickEdgeGeo(mask);
+        const mat = new THREE.ShaderMaterial({
+          vertexShader:   edgeVertShader,
+          fragmentShader: edgeFragShader,
+          uniforms: {
+            uThickMin:   { value: 0.15 },
+            uThickMax:   { value: 1.0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+          },
+          transparent: true,
+          depthWrite:  false,
+          blending:    THREE.AdditiveBlending,
+          side:        THREE.DoubleSide,
+        });
+
+        edgeMeshObj = new THREE.Mesh(geo, mat);
+        edgeMeshObj.frustumCulled = false;
+        scene.add(edgeMeshObj);
+        document.getElementById('stat-edges').textContent = visible.toLocaleString();
+        return edgeMeshObj;
+      }
+
+      let edgeGeo = null;
+      function createEdgeLines(mask) {
+        if (edgeLines) { scene.remove(edgeLines); edgeGeo.dispose(); }
+        const activeEdges = [];
+        for (let i = 0; i < edges.length; i++) if (!mask || mask[i]) activeEdges.push(i);
+        
+        const pos = new Float32Array(activeEdges.length * CURVE_SEGMENTS * 6);
+        const col = new Float32Array(activeEdges.length * CURVE_SEGMENTS * 6);
+        
+        let lineVertIdx = 0;
+        activeEdges.forEach((ei) => {
+          const { s, t } = edges[ei];
+          const pA = positions[s], pB = positions[t];
+          const cA = new THREE.Color(nodes[s].color);
+          const cB = new THREE.Color(nodes[t].color);
+          
+          const a  = 0.015; 
+
+          const dist = pA.distanceTo(pB);
+          const pC = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+          if (pC.length() > 0.001) {
+            const pull = pC.clone().normalize().multiplyScalar(dist * 0.32);
+            pC.add(pull);
+          }
+
+          function getBezierPoint(tCoeff) {
+            const oneMinusT = 1.0 - tCoeff;
+            return new THREE.Vector3()
+              .addScaledVector(pA, oneMinusT * oneMinusT)
+              .addScaledVector(pC, 2.0 * oneMinusT * tCoeff)
+              .addScaledVector(pB, tCoeff * tCoeff);
+          }
+
+          for (let seg = 0; seg < CURVE_SEGMENTS; seg++) {
+            const t0 = seg / CURVE_SEGMENTS;
+            const t1 = (seg + 1) / CURVE_SEGMENTS;
+
+            const pt0 = getBezierPoint(t0);
+            const pt1 = getBezierPoint(t1);
+
+            const segColor0 = cA.clone().lerp(cB, t0);
+            const segColor1 = cA.clone().lerp(cB, t1);
+
+            const vi = lineVertIdx * 6;
+            pos[vi]   = pt0.x; pos[vi+1] = pt0.y; pos[vi+2] = pt0.z;
+            pos[vi+3] = pt1.x; pos[vi+4] = pt1.y; pos[vi+5] = pt1.z;
+
+            col[vi]   = segColor0.r * a; col[vi+1] = segColor0.g * a; col[vi+2] = segColor0.b * a;
+            col[vi+3] = segColor1.r * a; col[vi+4] = segColor1.g * a; col[vi+5] = segColor1.b * a;
+
+            lineVertIdx++;
+          }
+        });
+        edgeGeo = new THREE.BufferGeometry();
+        edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        edgeGeo.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+        edgeMat = new THREE.LineBasicMaterial({
+          vertexColors: true, transparent: true, opacity: 1.0,
+          depthWrite: false, blending: THREE.AdditiveBlending,
+        });
+        edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+        scene.add(edgeLines);
+        return edgeLines;
+      }
+
+      createThickEdges(null);
+      createEdgeLines(null);
+
+      const starCount = 3000; const sp = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i++) sp[i] = (Math.random() - 0.5) * 220;
+      const starGeo = new THREE.BufferGeometry();
+      starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+      scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
+        color: 0x222238, size: 0.04, transparent: true, opacity: 0.5, depthWrite: false
+      })));
+
+      document.getElementById('stat-nodes').textContent = N.toLocaleString();
+
+      setStatus('Building UI components…', 82);
+      const seenFields = {}; nodes.forEach(n => { if (!seenFields[n.field]) seenFields[n.field] = n.color; });
+      const legendEl = document.getElementById('legend');
+      Object.entries(seenFields).forEach(([name, hex]) => {
+        const h = '#' + (hex || 0x666688).toString(16).padStart(6, '0');
+        const el = document.createElement('div'); el.className = 'legend-item';
+        el.innerHTML = `<div class="legend-dot" style="background:${h}"></div>${name}`;
+        legendEl.appendChild(el);
+      });
+
+      let sph = { theta: 0.3, phi: 1.2, r: 52 }; let tgt = { ...sph };
+      let dragging = false, prev = { x: 0, y: 0 }; let autoRotate = true;
+
+      const el = renderer.domElement;
+      el.addEventListener('mousedown', e => { dragging = true; prev = { x: e.clientX, y: e.clientY }; });
+      el.addEventListener('mouseup', () => dragging = false);
+      el.addEventListener('mouseleave', () => dragging = false);
+      el.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        tgt.theta -= (e.clientX - prev.x) * 0.005;
+        tgt.phi = Math.max(0.15, Math.min(Math.PI - 0.15, tgt.phi + (e.clientY - prev.y) * 0.004));
+        prev = { x: e.clientX, y: e.clientY };
+      });
+      el.addEventListener('wheel', e => { tgt.r = Math.max(4, Math.min(160, tgt.r + e.deltaY * 0.035)); }, { passive: true });
+
+      const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(-9999, -9999);
+      const tooltip = document.getElementById('tooltip'); let hoveredIdx = -1;
+
+      el.addEventListener('mousemove', e => {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        tooltip.style.left = (e.clientX + 16) + 'px'; tooltip.style.top = (e.clientY - 8) + 'px';
+      });
+
+      function updateEdgeHighlight(nodeIdx) {
+        if (highlightLines) { scene.remove(highlightLines); highlightGeo.dispose(); highlightLines = null; }
+        if (nodeIdx < 0) { if (edgeMat) edgeMat.opacity = 1.0; return; }
+
+        if (edgeMat) edgeMat.opacity = 0.12;
+
+        const activeLinks = edges.filter(e => e.s === nodeIdx || e.t === nodeIdx);
+        if (activeLinks.length === 0) return;
+
+        const pos = new Float32Array(activeLinks.length * CURVE_SEGMENTS * 6);
+        const col = new Float32Array(activeLinks.length * CURVE_SEGMENTS * 6);
+        const whiteColor = new THREE.Color(0xffffff);
+
+        let highlightVertIdx = 0;
+        activeLinks.forEach((e) => {
+          const pA = positions[e.s], pB = positions[e.t];
+          const cSource = new THREE.Color(nodes[e.s].color);
+          const cTarget = new THREE.Color(nodes[e.t].color);
+
+          const dist = pA.distanceTo(pB);
+          const pC = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+          if (pC.length() > 0.001) {
+            const pull = pC.clone().normalize().multiplyScalar(dist * 0.32);
+            pC.add(pull);
+          }
+
+          function getBezierPoint(tCoeff) {
+            const oneMinusT = 1.0 - tCoeff;
+            return new THREE.Vector3()
+              .addScaledVector(pA, oneMinusT * oneMinusT)
+              .addScaledVector(pC, 2.0 * oneMinusT * tCoeff)
+              .addScaledVector(pB, tCoeff * tCoeff);
+          }
+
+          for (let seg = 0; seg < CURVE_SEGMENTS; seg++) {
+            const t0 = seg / CURVE_SEGMENTS;
+            const t1 = (seg + 1) / CURVE_SEGMENTS;
+
+            const pt0 = getBezierPoint(t0);
+            const pt1 = getBezierPoint(t1);
+
+            let color0, color1;
+            if (e.s === nodeIdx) {
+              color0 = whiteColor.clone().lerp(cTarget, t0);
+              color1 = whiteColor.clone().lerp(cTarget, t1);
+            } else {
+              color0 = cSource.clone().lerp(whiteColor, t0);
+              color1 = cSource.clone().lerp(whiteColor, t1);
+            }
+
+            const vi = highlightVertIdx * 6;
+            pos[vi]   = pt0.x; pos[vi+1] = pt0.y; pos[vi+2] = pt0.z;
+            pos[vi+3] = pt1.x; pos[vi+4] = pt1.y; pos[vi+5] = pt1.z;
+
+            col[vi]   = color0.r * 0.9; col[vi+1] = color0.g * 0.9; col[vi+2] = color0.b * 0.9;
+            col[vi+3] = color1.r * 0.9; col[vi+4] = color1.g * 0.9; col[vi+5] = color1.b * 0.9;
+
+            highlightVertIdx++;
+          }
+        });
+
+        highlightGeo = new THREE.BufferGeometry();
+        highlightGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        highlightGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+
+        highlightLines = new THREE.LineSegments(highlightGeo, highlightMat);
+        scene.add(highlightLines);
+      }
+
+      function checkHover() {
+        raycaster.setFromCamera(mouse, camera); let best = -1, bestDist = Infinity;
+
+        instanceGroups.forEach(({ mesh }) => {
+          const hits = raycaster.intersectObject(mesh);
+          if (hits.length > 0 && hits[0].distance < bestDist) {
+            bestDist = hits[0].distance; const instIdx = hits[0].instanceId;
+            const nodeIdx = mesh.userData.nodeMap ? mesh.userData.nodeMap[instIdx] : -1;
+            if (nodeIdx >= 0) best = nodeIdx;
+          }
+        });
+
+        if (best !== hoveredIdx) {
+          hoveredIdx = best;
+          updateEdgeHighlight(best);
+
+          if (best >= 0) {
+            const n = nodes[best]; tooltip.style.display = 'block';
+            tooltip.innerHTML = `
+              <div class="tt-title">${n.label.replace(/^Paper \d+:\s*/, '')}</div>
+              <div class="tt-row">Field: <span>${n.field || '—'}</span></div>
+              <div class="tt-row">PageRank: <span>${n.pagerank.toExponential(3)}</span></div>
+              <div class="tt-row">Citations: <span>${(n.citations || 0).toLocaleString()}</span></div>
+              <div class="tt-row">Year: <span>${n.year || '—'}</span></div>
+            `;
+            el.style.cursor = 'pointer';
+          } else {
+            tooltip.style.display = 'none'; el.style.cursor = 'default';
+          }
+        }
+      }
+
+      const slider = document.getElementById('threshold-slider');
+      const threshVal = document.getElementById('threshold-val');
+      const prSorted = [...prAll].sort((a, b) => a - b);
+
+      slider.addEventListener('input', () => {
+        const pct = parseInt(slider.value); threshVal.textContent = pct + '%';
+        const cutoff = prSorted[Math.floor(pct / 100 * prSorted.length)] || 0;
+
+        instanceGroups.forEach(({ mesh, nodeIndices }) => {
+          nodeIndices.forEach((nodeIdx, instIdx) => {
+            const visible = nodes[nodeIdx].pagerank >= cutoff; dummy.position.copy(positions[nodeIdx]);
+            const radius = visible ? nodeRadius(nodes[nodeIdx].pagerank) : 0.0001;
+            dummy.scale.setScalar(radius); dummy.updateMatrix(); mesh.setMatrixAt(instIdx, dummy.matrix);
+          });
+          mesh.instanceMatrix.needsUpdate = true;
+        });
+
+        const mask = new Uint8Array(edges.length);
+        edges.forEach((e, i) => { mask[i] = (nodes[e.s].pagerank >= cutoff && nodes[e.t].pagerank >= cutoff) ? 1 : 0; });
+        createThickEdges(mask);
+        createEdgeLines(mask);
+        if (hoveredIdx >= 0) updateEdgeHighlight(hoveredIdx);
+
+        const visibleNodes = nodes.filter(n => n.pagerank >= cutoff).length;
+        document.getElementById('stat-nodes').textContent = visibleNodes.toLocaleString();
+      });
+
+      const searchInput = document.getElementById('search-input');
+      searchInput.addEventListener('input', () => {
+        const q = searchInput.value.toLowerCase().trim();
+        if (!q) { instanceGroups.forEach(({ mat }) => { mat.opacity = 0.88; mat.needsUpdate = true; }); return; }
+        instanceGroups.forEach(({ nodeIndices, mat }) => {
+          const anyMatch = nodeIndices.some(i => (nodes[i].label || '').toLowerCase().includes(q) || (nodes[i].field || '').toLowerCase().includes(q));
+          mat.opacity = anyMatch ? 0.88 : 0.05; mat.needsUpdate = true;
+        });
+      });
+
+      document.getElementById('btn-rotate').addEventListener('click', function () { autoRotate = !autoRotate; this.classList.toggle('active', autoRotate); });
+
+      let edgesOn = true;
+      document.getElementById('btn-edges').addEventListener('click', function () {
+        edgesOn = !edgesOn;
+        if (edgeMeshObj) edgeMeshObj.visible = edgesOn;
+        if (edgeLines)   edgeLines.visible   = edgesOn;
+        if (highlightLines) highlightLines.visible = edgesOn;
+        this.textContent = edgesOn ? 'Hide Edges' : 'Show Edges';
+        this.classList.toggle('active', !edgesOn);
+      });
+
+      document.getElementById('btn-reset').addEventListener('click', () => { tgt = { theta: 0.3, phi: 1.2, r: 52 }; });
+
+      const clock = new THREE.Clock(); let frame = 0;
+
+      renderer.setAnimationLoop(() => {
+        const dt = clock.getDelta(); frame++;
+        sph.theta += (tgt.theta - sph.theta) * 0.08; sph.phi += (tgt.phi - sph.phi) * 0.08; sph.r += (tgt.r - sph.r) * 0.08;
+
+        if (autoRotate && !dragging) tgt.theta += dt * 0.05;
+
+        camera.position.set(
+          sph.r * Math.sin(sph.phi) * Math.sin(sph.theta), sph.r * Math.cos(sph.phi), sph.r * Math.sin(sph.phi) * Math.cos(sph.theta)
+        );
+        camera.lookAt(0, 0, 0);
+
+        if (frame % 4 === 0) checkHover();
+        renderer.render(scene, camera);
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+        if (edgeMeshObj) edgeMeshObj.material.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+      });
+
+      setStatus('Ready.', 100);
+      slider.dispatchEvent(new Event('input'));
+      setTimeout(() => { const ld = document.getElementById('loading'); if (ld) { ld.style.opacity = '0'; setTimeout(() => ld.remove(), 600); } }, 350);
+
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
