@@ -433,8 +433,6 @@
 
       const N_FIELDS    = FIELD_PALETTE.length;
       const PHI         = Math.PI * (3 - Math.sqrt(5));
-      
-      // CRITICAL MODIFICATION: Increased localized spread threshold to disperse cluster nodes slightly further apart
       const NODE_SPREAD = 2.2; 
 
       const nodeFieldIdx = nodes.map(n =>
@@ -910,6 +908,74 @@
       })));
 
       document.getElementById('stat-nodes').textContent = N.toLocaleString();
+
+      // ── CRITICAL OVERHAUL: RADIAL HUD CLUSTER TEXT LABELS ─────────────
+      const fieldCenters3D = Array.from({ length: FIELD_PALETTE.length }, () => new THREE.Vector3());
+      const fieldNodeCounts = new Int32Array(FIELD_PALETTE.length);
+      nodes.forEach((n, i) => {
+        fieldCenters3D[n.field_idx].add(positions[i]);
+        fieldNodeCounts[n.field_idx]++;
+      });
+
+      FIELD_PALETTE.forEach((field, i) => {
+        if (fieldNodeCounts[i] > 0) {
+          fieldCenters3D[i].divideScalar(fieldNodeCounts[i]);
+          
+          // Generate a canvas drawing context optimized for high-density rendering layers
+          const canvas = document.createElement('canvas');
+          canvas.width = 1024; canvas.height = 256;
+          const ctx = canvas.getContext('2d');
+          
+          const textString = field.name.toUpperCase();
+          ctx.font = 'bold 36px "Inter", "SF Pro Display", system-ui, sans-serif';
+          ctx.letterSpacing = "2px";
+          
+          // Calculate explicit text bounds to draw a tightly fitted container capsule
+          const textMetrics = ctx.measureText(textString);
+          const paddingX = 46;
+          const paddingY = 22;
+          const cardW = textMetrics.width + (paddingX * 2);
+          const cardH = 36 + (paddingY * 2);
+          const startX = (1024 - cardW) / 2;
+          const startY = (256 - cardH) / 2;
+          
+          // Render a glassy dark container capsule to shield letters from glowing backdrop wires
+          ctx.fillStyle = 'rgba(4, 4, 14, 0.88)';
+          ctx.strokeStyle = '#' + (field.color || 0x666688).toString(16).padStart(6, '0');
+          ctx.lineWidth = 4;
+          
+          ctx.beginPath();
+          ctx.roundRect(startX, startY, cardW, cardH, 24);
+          ctx.fill();
+          ctx.stroke();
+          
+          // Draw high-contrast white tracking letters perfectly aligned inside the card
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(textString, 512, 128);
+          
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.minFilter = THREE.LinearMipmapLinearFilter; // Activate downsampling mipmaps
+          texture.generateMipmaps = true;
+
+          const spriteMat = new THREE.SpriteMaterial({
+            map: texture, transparent: true, depthWrite: false, fog: true
+          });
+          const labelSprite = new THREE.Sprite(spriteMat);
+          
+          // Match geometry bounding volume properties perfectly to prevent font squishing
+          labelSprite.scale.set(10.0, 2.5, 1.0);
+          labelSprite.position.copy(fieldCenters3D[i]);
+          
+          // Radial normal push calculations: pushes labels outward from origin, not strictly upwards
+          const radialDir = fieldCenters3D[i].clone().normalize();
+          labelSprite.position.addScaledVector(radialDir, 4.5); 
+          
+          scene.add(labelSprite);
+        }
+      });
+      // ───────────────────────────────────────────────────────────────────
 
       setStatus('Building UI components…', 82);
       const seenFields = {}; nodes.forEach(n => { if (!seenFields[n.field]) seenFields[n.field] = n.color; });
