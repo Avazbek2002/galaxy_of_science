@@ -5,8 +5,7 @@
 ![Map of Science](https://img.shields.io/badge/papers-112M-6b5bff?style=flat-square) ![Edges](https://img.shields.io/badge/citations-2.5B-b060ff?style=flat-square) ![Stack](https://img.shields.io/badge/stack-PySpark%20%7C%20Delta%20Lake%20%7C%20FastAPI%20%7C%20Three.js-48cae4?style=flat-square) ![Deploy](https://img.shields.io/badge/deploy-Vercel-black?style=flat-square)
 
 **[→ Live Demo: science-galaxy.avazbek.xyz](https://science-galaxy.avazbek.xyz/)**
-![Uploading image.png…]()
-
+<img width="1512" height="855" alt="image" src="https://github.com/user-attachments/assets/25eb602c-5e32-46f8-8138-2b5f61a0dda9" />
 
 ---
 
